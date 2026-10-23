@@ -31,6 +31,7 @@ LOG:
 - C3 done: screenshots q1.png through q5.png captured from running frontend at localhost:8000 and saved in screenshots/.
 - C4 done: comprehensive README.md written with architecture mermaid flow, setup guide, grounding mechanisms, benchmark answers table, embedded UI screenshots, and directory layout.
 - C5 done: git repository initialized, files staged and committed with .env strictly ignored, and pushed to GitHub repository gas-turbine-rag.
+- Step 9 done: restyled frontend to ChatGPT web app aesthetic (sidebar, clean chat thread, neutral colors, pulsing thinking indicator), recaptured screenshots q1..q5 (1440x900), updated README.md, and pushed to GitHub.
 
 ISSUES:
 - CHAT_MODEL changed from gemini-2.5-flash (404 for new users) to gemini-3.5-flash-lite (confirmed working) in config.py.

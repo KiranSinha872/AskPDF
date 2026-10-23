@@ -38,7 +38,7 @@ flowchart TD
 - **PDF Processing**: `pypdf`
 - **Output Parsing & Validation**: Pydantic v2
 - **Backend API**: FastAPI, Uvicorn
-- **Frontend**: Clean Vanilla HTML/CSS/JS (embedded single-page application, custom neutral color system)
+- **Frontend**: ChatGPT-style Vanilla HTML/CSS/JS (embedded single-page application, neutral palette, sidebar, and chat-thread layout)
 
 ---
 
@@ -117,11 +117,11 @@ The system was evaluated against the 5 benchmark questions from `answers.md`:
 
 ### Q1: Three Main Types of Inspection
 ![Question 1: What are the three main types of inspection?](screenshots/q1.png)
-*Figure 1: Standby, running, and disassembly inspections cited from page 25, alongside Annular/Silo Type A/B/C from page 32.*
+*Figure 1: ChatGPT-style interface displaying standby, running, and disassembly inspections cited from page 25 alongside Annular/Silo Type A/B/C from page 32.*
 
 ### Q2: Maintenance Factor of Two
 ![Question 2: What does a maintenance factor of two mean?](screenshots/q2.png)
-*Figure 2: Grounded definition from page 9 showing that MF=2 halves the baseline maintenance interval.*
+*Figure 2: Grounded definition from page 9 showing that a maintenance factor of two halves the baseline maintenance interval.*
 
 ### Q3: Purchase Price (Out of Domain)
 ![Question 3: What is the purchase price of this gas turbine?](screenshots/q3.png)
@@ -146,7 +146,7 @@ The system was evaluated against the 5 benchmark questions from `answers.md`:
 │   └── GER-3620-P.pdf     # Source GE documentation (60 pages)
 ├── db/                    # Local ChromaDB persistent vector database
 ├── frontend/
-│   └── index.html         # Single-page web UI (vanilla CSS & JS)
+│   └── index.html         # ChatGPT-style single-page web UI (vanilla CSS & JS)
 ├── ingest.py              # Ingestion pipeline: load, split, embed, persist
 ├── rag_chain.py           # LCEL chain, AnswerSchema, prompt, postprocessing
 ├── run_questions.py       # Benchmark script for the 5 target questions -> answers.md
@@ -159,3 +159,5 @@ The system was evaluated against the 5 benchmark questions from `answers.md`:
 ├── .env.example           # Example environment template
 └── README.md              # Project documentation
 ```
+
+> **Note on Page Numbers**: All page citations are 1-based (Page 1 corresponds to the document cover, exactly matching PDF viewer page indexing).

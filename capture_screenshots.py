@@ -1,6 +1,6 @@
 """
-capture_screenshots.py — Automate browser to ask each of the 5 questions
-and save screenshots/q1.png ... screenshots/q5.png.
+capture_screenshots.py — Open each of the 5 preset questions in a 1440x900 window,
+click New chat between each, wait for the answer, and save screenshots/q1.png ... q5.png.
 """
 import os
 import time
@@ -16,32 +16,33 @@ QUESTIONS = [
 
 os.makedirs("screenshots", exist_ok=True)
 
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 960, "height": 720})
-        
+        context = browser.new_context(viewport={"width": 1440, "height": 900})
+
         for idx, q in enumerate(QUESTIONS, 1):
-            print(f"[{idx}/5] Opening page for: {q}")
+            print(f"[{idx}/5] {q}")
             page = context.new_page()
-            page.goto("http://127.0.0.1:8000")
-            page.wait_for_selector(".preset-btn")
-            
-            # Click the preset button
-            buttons = page.query_selector_all(".preset-btn")
-            buttons[idx - 1].click()
-            
-            # Wait for result card
-            page.wait_for_selector(".result-card", timeout=30000)
-            page.wait_for_timeout(1000)
-            
-            out_path = f"screenshots/q{idx}.png"
-            page.screenshot(path=out_path)
-            print(f"  Saved screenshot to {out_path}")
+            page.goto("http://127.0.0.1:8000", wait_until="networkidle")
+
+            # Click the matching preset pill (text match)
+            pill = page.locator(".sample-pill", has_text=q.strip())
+            pill.click()
+
+            # Wait for .answer-text or .answer-text.not-found to appear
+            page.wait_for_selector(".answer-text", timeout=45000)
+            page.wait_for_timeout(800)   # let any layout settle
+
+            out = f"screenshots/q{idx}.png"
+            page.screenshot(path=out, full_page=False)
+            print(f"   Saved {out}")
             page.close()
-            
+
         browser.close()
-    print("All screenshots successfully captured!")
+    print("All 5 screenshots saved.")
+
 
 if __name__ == "__main__":
     main()
