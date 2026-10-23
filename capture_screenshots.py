@@ -37,7 +37,8 @@ def main():
 
             out = f"screenshots/q{idx}.png"
             page.screenshot(path=out, full_page=False)
-            print(f"   Saved {out}")
+            page.screenshot(path=f"screenshots/chatgpt_q{idx}.png", full_page=False)
+            print(f"   Saved {out} and screenshots/chatgpt_q{idx}.png")
             page.close()
 
         browser.close()

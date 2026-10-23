@@ -118,23 +118,23 @@ The system was evaluated against the 5 benchmark questions from `answers.md`:
 ## UI Screenshots
 
 ### Q1: Three Main Types of Inspection
-![Question 1: What are the three main types of inspection?](screenshots/q1.png)
+![Question 1: What are the three main types of inspection?](screenshots/chatgpt_q1.png)
 *Figure 1: ChatGPT-style interface displaying standby, running, and disassembly inspections cited from page 25 alongside Annular/Silo Type A/B/C from page 32.*
 
 ### Q2: Maintenance Factor of Two
-![Question 2: What does a maintenance factor of two mean?](screenshots/q2.png)
+![Question 2: What does a maintenance factor of two mean?](screenshots/chatgpt_q2.png)
 *Figure 2: Grounded definition from page 9 showing that a maintenance factor of two halves the baseline maintenance interval.*
 
 ### Q3: Purchase Price (Out of Domain)
-![Question 3: What is the purchase price of this gas turbine?](screenshots/q3.png)
+![Question 3: What is the purchase price of this gas turbine?](screenshots/chatgpt_q3.png)
 *Figure 3: Strictly returning "Not found" when financial/commercial data is queried.*
 
 ### Q4: Melting Point of Titanium (Out of Domain)
-![Question 4: What is the melting point of titanium?](screenshots/q4.png)
+![Question 4: What is the melting point of titanium?](screenshots/chatgpt_q4.png)
 *Figure 4: Strictly returning "Not found" for external material physics facts absent in GER-3620.*
 
 ### Q5: Recommended Combustion-Inspection Interval
-![Question 5: What is the recommended combustion-inspection interval in hours?](screenshots/q5.png)
+![Question 5: What is the recommended combustion-inspection interval in hours?](screenshots/chatgpt_q5.png)
 *Figure 5: Combustion inspection interval in hours from Figure 36 on page 33.*
 
 ---
@@ -157,7 +157,7 @@ The system was evaluated against the 5 benchmark questions from `answers.md`:
 ├── answers.md             # Benchmark answers table
 ├── PROGRESS.md            # Project progress tracking and verification log
 ├── requirements.txt       # Python dependencies
-├── screenshots/           # UI captures (q1.png - q5.png)
+├── screenshots/           # UI captures (chatgpt_q1.png - chatgpt_q5.png)
 ├── .env.example           # Example environment template
 └── README.md              # Project documentation
 ```
