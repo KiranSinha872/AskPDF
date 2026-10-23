@@ -6,6 +6,8 @@ The assistant answers technical questions with exact section names, 1-based page
 
 ---
 
+Deployed Link : https://gas-turbine-rag.onrender.com
+
 ## Architecture Flow
 
 ```mermaid
