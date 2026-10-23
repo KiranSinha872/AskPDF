@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gas Turbine Maintenance Assistant</title>
+  <style>
+    :root {
+      --color-page:   #FFFFFF;
+      --color-panel:  #F2F2F2;
+      --color-border: #D9D9D9;
+      --color-accent: #EFE7DA;
+      --color-text:   #333333;
+      --radius: 4px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      background: var(--color-page);
+      color: var(--color-text);
+      padding: 32px 16px;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--color-border);
+      margin-bottom: 20px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    #question-input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-family: inherit;
+      background: var(--color-page);
+      color: var(--color-text);
+      outline: none;
+    }
+
+    #question-input:focus {
+      border-color: #999;
+    }
+
+    #ask-btn {
+      padding: 8px 18px;
+      background: var(--color-accent);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-family: inherit;
+      cursor: pointer;
+      color: var(--color-text);
+    }
+
+    #ask-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+
+    .preset-btn {
+      padding: 5px 10px;
+      background: var(--color-accent);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      color: var(--color-text);
+      text-align: left;
+    }
+
+    .preset-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #results { display: flex; flex-direction: column; gap: 12px; }
+
+    .result-card {
+      background: var(--color-panel);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .result-question {
+      font-size: 13px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+
+    .result-answer {
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .result-answer.not-found {
+      color: #888;
+      font-weight: 400;
+    }
+
+    .result-ref {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .result-quote {
+      font-size: 12px;
+      color: #666;
+      background: var(--color-border);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      margin-top: 4px;
+    }
+
+    .status-msg {
+      font-size: 14px;
+      color: #666;
+      padding: 10px 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Gas Turbine Maintenance Assistant</h1>
+  <p class="subtitle">Source: GE GER-3620 Rev P</p>
+
+  <div class="input-row">
+    <input id="question-input" type="text" placeholder="Type a question about the document..." autocomplete="off" />
+    <button id="ask-btn">Ask</button>
+  </div>
+
+  <div class="presets">
+    <button class="preset-btn">What are the three main types of inspection?</button>
+    <button class="preset-btn">What does a maintenance factor of two mean?</button>
+    <button class="preset-btn">What is the purchase price of this gas turbine?</button>
+    <button class="preset-btn">What is the melting point of titanium?</button>
+    <button class="preset-btn">What is the recommended combustion-inspection interval in hours?</button>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+  const input   = document.getElementById('question-input');
+  const askBtn  = document.getElementById('ask-btn');
+  const results = document.getElementById('results');
+
+  function setDisabled(on) {
+    askBtn.disabled = on;
+    document.querySelectorAll('.preset-btn').forEach(b => b.disabled = on);
+  }
+
+  function prependStatus(msg) {
+    const el = document.createElement('p');
+    el.className = 'status-msg';
+    el.id = 'status-msg';
+    el.textContent = msg;
+    results.prepend(el);
+  }
+
+  function removeStatus() {
+    const el = document.getElementById('status-msg');
+    if (el) el.remove();
+  }
+
+  function renderResult(question, data) {
+    removeStatus();
+    const card = document.createElement('div');
+    card.className = 'result-card';
+
+    const q = document.createElement('div');
+    q.className = 'result-question';
+    q.textContent = question;
+    card.appendChild(q);
+
+    if (!data.found) {
+      const ans = document.createElement('div');
+      ans.className = 'result-answer not-found';
+      ans.textContent = 'Not found';
+      card.appendChild(ans);
+    } else {
+      const ans = document.createElement('div');
+      ans.className = 'result-answer';
+      ans.textContent = data.answer;
+      card.appendChild(ans);
+
+      if (data.section || data.pages.length) {
+        const ref = document.createElement('div');
+        ref.className = 'result-ref';
+        const parts = [];
+        if (data.section) parts.push('Section: ' + data.section);
+        if (data.pages.length) parts.push('Page: ' + data.pages.join(', '));
+        ref.textContent = parts.join(' | ');
+        card.appendChild(ref);
+      }
+
+      if (data.quote) {
+        const qt = document.createElement('div');
+        qt.className = 'result-quote';
+        qt.textContent = '\u201c' + data.quote + '\u201d';
+        card.appendChild(qt);
+      }
+    }
+
+    results.prepend(card);
+  }
+
+  async function submit() {
+    const question = input.value.trim();
+    if (!question) return;
+
+    setDisabled(true);
+    removeStatus();
+    prependStatus('Searching...');
+
+    try {
+      const res = await fetch('/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+
+      if (!res.ok) {
+        removeStatus();
+        prependStatus('Server error: ' + res.status);
+      } else {
+        const data = await res.json();
+        renderResult(question, data);
+      }
+    } catch (e) {
+      removeStatus();
+      prependStatus('Server not reachable.');
+    } finally {
+      setDisabled(false);
+      input.value = '';
+    }
+  }
+
+  askBtn.addEventListener('click', submit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      input.value = btn.textContent;
+      submit();
+    });
+  });
+</script>
+</body>
+</html>
