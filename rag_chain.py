@@ -1,5 +1,5 @@
 """
-rag_chain.py — Build the LCEL RAG chain for the Gas Turbine Maintenance Assistant.
+rag_chain.py — Build the LCEL RAG chain for any document collection in ChromaDB.
 
 Grounding guarantees in postprocess():
   - Quote must appear (fuzzy-normalized) in the actual retrieved context text.
@@ -7,7 +7,7 @@ Grounding guarantees in postprocess():
   - If either check fails, return the canonical Not-found dict.
 """
 import re
-from typing import List
+from typing import List, Dict
 
 from langchain_chroma import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
@@ -68,7 +68,7 @@ def postprocess(inputs: dict) -> dict:
     """
     Validate the LLM output against the retrieved context before returning.
 
-    `inputs` has two keys set by RunnablePassthrough.assign:
+    `inputs` has keys set by RunnablePassthrough.assign:
         "result"  – the AnswerSchema parsed by PydanticOutputParser
         "context" – the already-formatted context string (from format_docs)
         "chunks"  – the raw Doc list (for page-number verification)
@@ -116,36 +116,42 @@ def postprocess(inputs: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Chain builder
+# Chain caching & builder
 # ---------------------------------------------------------------------------
-def build_chain():
-    # Embeddings + Chroma retriever
+_chain_cache: Dict[str, any] = {}
+
+
+def build_chain(doc_id: str = "default"):
+    """
+    Build or return cached LCEL RAG chain for a specific Chroma collection `doc_id`.
+    """
+    if doc_id in _chain_cache:
+        return _chain_cache[doc_id]
+
     embeddings = GoogleGenerativeAIEmbeddings(
         model=config.EMBED_MODEL,
         google_api_key=config.GOOGLE_API_KEY,
     )
     db = Chroma(
+        collection_name=doc_id,
         persist_directory=config.DB_DIR,
         embedding_function=embeddings,
     )
     retriever = db.as_retriever(search_kwargs={"k": config.TOP_K})
 
-    # LLM
     llm = ChatGoogleGenerativeAI(
         model=config.CHAT_MODEL,
         temperature=0,
         google_api_key=config.GOOGLE_API_KEY,
     )
 
-    # Parser
     parser = PydanticOutputParser(pydantic_object=AnswerSchema)
     format_instructions = parser.get_format_instructions()
 
-    # Prompt
     prompt_template = PromptTemplate(
         input_variables=["context", "question"],
         partial_variables={"format_instructions": format_instructions},
-        template="""You are a technical assistant for GE heavy-duty gas turbine documentation (GER-3620 Rev P).
+        template="""You are a technical assistant for question answering over the document.
 
 CONTEXT (retrieved passages — these are the ONLY facts you may use):
 {context}
@@ -154,22 +160,14 @@ QUESTION: {question}
 
 STRICT RULES:
 1. Answer ONLY using information that is explicitly stated in the CONTEXT above. Do not use any outside knowledge.
-2. Every statement in the answer must be directly supported by the quote. Do not add numbers, definitions or facts that are not in the context.
-3. If the context only partly answers the question, set found=false.
-4. The purchase price of the turbine is NOT in this document — if asked, set found=false.
-5. The melting point of titanium is NOT in this document — if asked, set found=false.
-6. When asked about inspection types, note both the general classifications: standby, running, and disassembly (which progress from combustion to hot gas path to major inspection) and the Annular/Silo fleet (Type A, B, C) if present in context.
-7. If found=true: provide a short answer, the 1-based page number(s) taken from the [Page N] labels, the section heading, and a verbatim quote under 25 words.
-8. If found=false: set answer, section, quote to empty strings and pages to [].
+2. Every statement in the answer must be directly supported by the quote. Do not add numbers, definitions, or facts that are not in the context.
+3. If the context does not clearly and fully answer the question, set found=false.
+4. If found=true: provide a short direct answer, the 1-based page number(s) taken from the [Page N] labels, the section heading from the document (or empty string if none is identifiable), and a verbatim quote under 25 words directly from the context.
+5. If found=false: set answer, section, quote to empty strings and pages to [].
 
 {format_instructions}
 """,
     )
-
-    # ── LCEL chain ────────────────────────────────────────────────────────────
-    # We need both the retrieved docs AND the formatted context string in
-    # postprocess, so we build the context branch explicitly and pass everything
-    # forward via RunnablePassthrough.assign.
 
     def retrieve_and_format(question: str) -> dict:
         """Retrieve docs, format context string, return both."""
@@ -192,4 +190,6 @@ STRICT RULES:
         )
         | RunnableLambda(postprocess)
     )
+
+    _chain_cache[doc_id] = chain
     return chain

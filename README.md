@@ -1,31 +1,32 @@
-# Gas Turbine Maintenance Assistant (GE GER-3620 RAG)
+# Document Q&A (Generalized PDF RAG Assistant)
 
-A grounded Retrieval-Augmented Generation (RAG) assistant for General Electric (GE Vernova) heavy-duty gas turbine operation and maintenance documentation (**GE GER-3620 Rev P**, 60 pages). 
+A grounded Retrieval-Augmented Generation (RAG) assistant for querying **any PDF document** with strict citations and zero hallucination.
 
-The assistant answers technical questions with exact section names, 1-based page numbers, and verbatim quotes from the text. If information is not explicitly documented or only partially supported, the system strictly outputs **"Not found"** to eliminate hallucinations.
+Users can upload any PDF (up to 20MB), which is automatically parsed, split into text chunks, embedded via Gemini, and indexed into a dedicated ChromaDB collection. The assistant answers technical questions with exact section names, 1-based page numbers, and verbatim quotes from the document. If information is not explicitly documented or only partially supported, the system strictly outputs **"Not found"**.
 
 ---
 
-Deployed Link : https://gas-turbine-rag.onrender.com
+Deployed Link: https://gas-turbine-rag.onrender.com
 
 ## Architecture Flow
 
 ```mermaid
 flowchart TD
-    A["PDF (data/GER-3620-P.pdf)"] --> B["PyPDFLoader"]
-    B --> C["RecursiveCharacterTextSplitter<br/>(chunk_size=1000, overlap=150)"]
-    C --> D["Gemini Embeddings<br/>(models/gemini-embedding-001)"]
-    D --> E["Chroma Vector Store (db/)"]
+    UserUpload["User uploads PDF (UI or POST /upload)"] --> Validate["Validate (.pdf, application/pdf, <=20MB)"]
+    Validate --> Ingest["ingest_pdf(pdf_path, doc_id)"]
+    Ingest --> PyPDF["PyPDFLoader (1-based page metadata)"]
+    PyPDF --> Split["RecursiveCharacterTextSplitter (chunk_size=1000, overlap=150)"]
+    Split --> Embed["Gemini Embeddings (models/gemini-embedding-001)"]
+    Embed --> Chroma["ChromaDB Collection (doc_id) in db/"]
     
-    UserQuery["User Query"] --> F["Retriever (top_k=6)"]
-    E --> F
-    F --> G["Prompt Template<br/>(Strict Grounding Rules)"]
-    UserQuery --> G
-    G --> H["Gemini LLM<br/>(gemini-3.5-flash-lite)"]
-    H --> I["PydanticOutputParser<br/>(AnswerSchema)"]
-    I --> J["Post-Processing Verification<br/>- Normalized Quote Substring Check<br/>- Page Presence in Retrieved Chunks<br/>- Not-Found Fallback Rule"]
-    J --> K["FastAPI Server (/ask)"]
-    K --> L["Frontend UI (frontend/index.html)"]
+    UserQuery["User Question + doc_id (POST /ask)"] --> Cache["build_chain(doc_id) / Cache"]
+    Chroma --> Retriever["Retriever (top_k=6)"]
+    UserQuery --> Retriever
+    Retriever --> Prompt["Prompt Template (Strict Grounding Rules)"]
+    Prompt --> LLM["Gemini LLM (gemini-3.5-flash-lite)"]
+    LLM --> Parser["PydanticOutputParser (AnswerSchema)"]
+    Parser --> Grounding["Post-Processing Verification<br/>- Normalized Quote Substring Check<br/>- Page Presence in Retrieved Chunks<br/>- Canonical Not-Found Fallback"]
+    Grounding --> Response["JSON Response to User"]
 ```
 
 ---
@@ -35,12 +36,68 @@ flowchart TD
 - **Language & Runtime**: Python 3.10+
 - **RAG & Orchestration**: LangChain, LangChain Community, LangChain Google GenAI, LangChain Chroma
 - **Embeddings**: Google Generative AI Embeddings (`models/gemini-embedding-001`, 3072-dim)
-- **Vector Database**: ChromaDB (local persistence in `db/`)
+- **Vector Database**: ChromaDB (isolated collection per document in `db/`)
 - **LLM**: Google Gemini (`gemini-3.5-flash-lite`)
 - **PDF Processing**: `pypdf`
 - **Output Parsing & Validation**: Pydantic v2
-- **Backend API**: FastAPI, Uvicorn
-- **Frontend**: ChatGPT-style Vanilla HTML/CSS/JS (embedded single-page application, neutral palette, sidebar, and chat-thread layout)
+- **Backend API**: FastAPI, Uvicorn, Python-Multipart
+- **Frontend**: ChatGPT-style Vanilla HTML/CSS/JS (drag-and-drop file upload, sidebar document info, dynamic `doc_id` session, and localStorage persistence)
+
+---
+
+## API Endpoints
+
+### 1. `POST /upload`
+Uploads and indexes any PDF into ChromaDB.
+- **Request**: Multipart Form Data with `file` field (`.pdf`, `application/pdf`, max 20MB).
+- **Process**: Generates a 12-character hexadecimal `doc_id`, saves to `uploads/`, splits text, embeds chunks, and builds a collection named `doc_id`.
+- **Response**:
+  ```json
+  {
+    "doc_id": "56b6999d72ea",
+    "filename": "document.pdf",
+    "pages": 60,
+    "chunks": 270
+  }
+  ```
+- **Error Codes**: `400` for invalid format, size > 20MB, empty file, or scanned PDFs with no readable text; `500` for internal errors.
+
+### 2. `POST /ask`
+Queries a specific document collection using the grounded RAG chain.
+- **Request Body**:
+  ```json
+  {
+    "question": "What are the three main types of inspection?",
+    "doc_id": "56b6999d72ea"
+  }
+  ```
+- **Response (Found)**:
+  ```json
+  {
+    "found": true,
+    "answer": "The three types of scheduled inspections for all gas turbines in the GE Vernova Annular/Silo fleet are Type A Visual Inspection, Type B Visual Inspection, and Type C Major Inspection.",
+    "pages": [32],
+    "section": "ABC Inspections For Annular/Silo Fleet",
+    "quote": "Type A Visual Inspection, Type B Visual Inspection, and Type C Major Inspection"
+  }
+  ```
+- **Response (Not Found)**:
+  ```json
+  {
+    "found": false,
+    "answer": "Not found",
+    "pages": [],
+    "section": "",
+    "quote": ""
+  }
+  ```
+- **Error Codes**: `400` if `question` or `doc_id` is empty; `404` if the `doc_id` collection does not exist; `500` on server error.
+
+### 3. `GET /health`
+Health check endpoint returning `{"status": "ok"}`.
+
+### 4. `GET /`
+Serves the ChatGPT-style single-page web application.
 
 ---
 
@@ -50,7 +107,7 @@ flowchart TD
 
 ```bash
 git clone <repo-url>
-cd gas-turbine-rag
+cd AskPDF
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -67,11 +124,11 @@ Open `.env` and insert your Gemini API key:
 GOOGLE_API_KEY=your_gemini_api_key_here
 ```
 
-### 3. Ingest the Document into ChromaDB
+### 3. Ingest via CLI (Optional)
 
-Parse `data/GER-3620-P.pdf`, chunk into text segments with 1-based page numbers, generate embeddings, and persist into `db/`:
+You can index documents directly from the terminal:
 ```bash
-python ingest.py
+python ingest.py <path_to_pdf> [doc_id]
 ```
 
 ### 4. Start the Application Server
@@ -87,55 +144,17 @@ Open `http://localhost:8000` in your browser.
 
 ## How Citations and "Not Found" Work
 
-Grounding is enforced at two stages:
+Grounding is enforced deterministically at two stages:
 
 1. **System Prompt Rules**:
-   - The LLM is instructed to answer **only** using explicitly provided context.
-   - If the context only partially answers or the fact is absent (e.g. turbine purchase price or melting point of titanium), `found` must be set to `false`.
-   - The model must extract a verbatim quote (< 25 words) from the context supporting every claim.
+   - The LLM is instructed to answer **strictly** from the retrieved context without using outside knowledge.
+   - If the context only partially answers or the fact is absent, `found` is set to `false`.
+   - The model must supply a verbatim supporting quote under 25 words from the context.
 
 2. **Deterministic Post-Processing (`postprocess` in `rag_chain.py`)**:
-   - **Quote Verification**: The model's quote is whitespace- and case-normalized. The first distinctive words must exist as a substring within the retrieved context chunks. If not matched, the answer is discarded and replaced with `Not found`.
-   - **Page Verification**: All page numbers in `pages` must be present among the metadata of the retrieved chunks. If any page is invalid, it is pruned. If no valid pages remain, `Not found` is returned.
-   - **Canonical Not-Found**: Returns `{"answer": "Not found", "found": false, "pages": [], "section": "", "quote": ""}`.
-
----
-
-## Target Questions & Results
-
-The system was evaluated against the 5 benchmark questions from `answers.md`:
-
-| Question | Answer | Section | Page | Quote |
-|---|---|---|---|---|
-| What are the three main types of inspection? | Maintenance inspection types are broadly classified as standby, running, and disassembly inspections. For the GE Vernova Annular/Silo fleet, the three types of scheduled inspections are Type A Visual Inspection, Type B Visual Inspection, and Type C Major Inspection. | Maintenance Inspections | 25, 32 | Maintenance inspection types may be broadly classified as standby, running, and disassembly inspections. |
-| What does a maintenance factor of two mean? | A maintenance factor of two indicates a maintenance interval that is half of the baseline interval. | Heavy-Duty Gas Turbine Operating and Maintenance Considerations | 9 | a maintenance factor of two would indicate a maintenance interval that is half of the baseline interval |
-| What is the purchase price of this gas turbine? | Not found | - | - | - |
-| What is the melting point of titanium? | Not found | - | - | - |
-| What is the recommended combustion-inspection interval in hours? | The recommended combustion-inspection interval in hours varies by turbine model, such as 12,000 hours for 6B (DLN) and up to 32,000 hours for 7F (DLN) baseline conditions. | Figure 36 . Baseline recommended inspection intervals: base load – natural gas fuel – dry | 33 | Combustion (DLN) Factored 12000/450 |
-
----
-
-## UI Screenshots
-
-### Q1: Three Main Types of Inspection
-![Question 1: What are the three main types of inspection?](screenshots/chatgpt_q1.png)
-*Figure 1: ChatGPT-style interface displaying standby, running, and disassembly inspections cited from page 25 alongside Annular/Silo Type A/B/C from page 32.*
-
-### Q2: Maintenance Factor of Two
-![Question 2: What does a maintenance factor of two mean?](screenshots/chatgpt_q2.png)
-*Figure 2: Grounded definition from page 9 showing that a maintenance factor of two halves the baseline maintenance interval.*
-
-### Q3: Purchase Price (Out of Domain)
-![Question 3: What is the purchase price of this gas turbine?](screenshots/chatgpt_q3.png)
-*Figure 3: Strictly returning "Not found" when financial/commercial data is queried.*
-
-### Q4: Melting Point of Titanium (Out of Domain)
-![Question 4: What is the melting point of titanium?](screenshots/chatgpt_q4.png)
-*Figure 4: Strictly returning "Not found" for external material physics facts absent in GER-3620.*
-
-### Q5: Recommended Combustion-Inspection Interval
-![Question 5: What is the recommended combustion-inspection interval in hours?](screenshots/chatgpt_q5.png)
-*Figure 5: Combustion inspection interval in hours from Figure 36 on page 33.*
+   - **Quote Verification**: The model's quote is whitespace- and case-normalized. The first distinctive words must exist as an exact substring in the retrieved text. If not matched, the answer is discarded and replaced with `Not found`.
+   - **Page Verification**: All page numbers in `pages` must exist in the metadata of the retrieved chunks. If any page is invalid, it is pruned. If no valid pages remain, `Not found` is returned.
+   - **Canonical Not-Found**: Exactly returns `{"answer": "Not found", "found": false, "pages": [], "section": "", "quote": ""}`.
 
 ---
 
@@ -143,21 +162,19 @@ The system was evaluated against the 5 benchmark questions from `answers.md`:
 
 ```
 .
-├── config.py              # Centralized configuration (models, chunking, top_k)
-├── data/
-│   └── GER-3620-P.pdf     # Source GE documentation (60 pages)
+├── config.py              # Settings: CHUNK_SIZE, CHUNK_OVERLAP, TOP_K, UPLOAD_DIR, MAX_UPLOAD_MB
+├── data/                  # Sample PDFs (data/GER-3620-P.pdf, test_solar.pdf)
 ├── db/                    # Local ChromaDB persistent vector database
 ├── frontend/
-│   └── index.html         # ChatGPT-style single-page web UI (vanilla CSS & JS)
-├── ingest.py              # Ingestion pipeline: load, split, embed, persist
-├── rag_chain.py           # LCEL chain, AnswerSchema, prompt, postprocessing
-├── run_questions.py       # Benchmark script for the 5 target questions -> answers.md
-├── capture_screenshots.py # Automation script for capturing UI screenshots
-├── server.py              # FastAPI application server (/ask, /, /health)
+│   └── index.html         # ChatGPT-style web UI with drag-and-drop PDF upload & dynamic session
+├── ingest.py              # ingest_pdf(pdf_path, doc_id) and CLI ingestion
+├── rag_chain.py           # build_chain(doc_id), AnswerSchema, generalized prompt, postprocess
+├── server.py              # FastAPI application server (POST /upload, POST /ask, GET /, GET /health)
+├── test_pipeline.py       # End-to-end Python test suite for upload, querying, isolation & errors
+├── requirements.txt       # Python dependencies (includes python-multipart)
 ├── answers.md             # Benchmark answers table
 ├── PROGRESS.md            # Project progress tracking and verification log
-├── requirements.txt       # Python dependencies
-├── screenshots/           # UI captures (chatgpt_q1.png - chatgpt_q5.png)
+├── screenshots/           # UI captures
 ├── .env.example           # Example environment template
 └── README.md              # Project documentation
 ```

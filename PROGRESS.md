@@ -1,9 +1,9 @@
-# Gas Turbine Maintenance Assistant (RAG)
-Goal: RAG over data/GER-3620-P.pdf (GE GER-3620 Rev P, 60 pp) with Python + LangChain + ChromaDB + Gemini. Answer with section + page reference. Reply exactly "Not found" if the answer is not in the PDF. PydanticOutputParser before final output. Frontend for users. Deliver: GitHub repo, README (flow + answers + screenshots), 5 answers for the LMS form.
+# Document Q&A / Gas Turbine Maintenance Assistant (RAG)
+Goal: RAG over any PDF (including data/GER-3620-P.pdf) with Python + LangChain + ChromaDB + Gemini. Answer with section + page reference. Reply exactly "Not found" if the answer is not in the PDF. PydanticOutputParser before final output. Frontend for users. Deliver: GitHub repo, README (flow + answers + screenshots), 5 answers for the LMS form.
 
 Questions: 1 three main types of inspection | 2 maintenance factor of two | 3 purchase price (Not found) | 4 melting point of titanium (Not found) | 5 recommended combustion-inspection interval in hours
 
-Tech: config.py (PDF_PATH, DB_DIR=db, CHAT_MODEL=gemini-2.5-flash, EMBED_MODEL=models/gemini-embedding-001, CHUNK_SIZE=1000, CHUNK_OVERLAP=150, TOP_K=4). Key in .env as GOOGLE_API_KEY (never commit or print). Chain: {"context": retriever | format_docs, "question": RunnablePassthrough()} | prompt | llm | PydanticOutputParser | RunnableLambda(postprocess). AnswerSchema(found, answer, pages, section, quote). Not-found output: {"answer":"Not found","found":false,"pages":[],"section":"","quote":""}. Pages are 1-based. Server: FastAPI POST /ask, GET /, GET /health, CORS on, uvicorn server:app --port 8000. Frontend: frontend/index.html, no frameworks.
+Tech: config.py (UPLOAD_DIR=uploads, MAX_UPLOAD_MB=20, DB_DIR=db, CHAT_MODEL=gemini-3.5-flash-lite, EMBED_MODEL=models/gemini-embedding-001, CHUNK_SIZE=1000, CHUNK_OVERLAP=150, TOP_K=6). Key in .env as GOOGLE_API_KEY (never commit or print). Chain: {"context": retriever | format_docs, "question": RunnablePassthrough()} | prompt | llm | PydanticOutputParser | RunnableLambda(postprocess). AnswerSchema(found, answer, pages, section, quote). Not-found output: {"answer":"Not found","found":false,"pages":[],"section":"","quote":""}. Pages are 1-based. Server: FastAPI POST /upload, POST /ask, GET /, GET /health, CORS on, uvicorn server:app --port 8000. Frontend: frontend/index.html, no frameworks.
 
 RULES: Read this file first. Do only the next unchecked step. Do not redo finished steps or rewrite working files. Run commands yourself. After each step, tick it and add a line to the log. Write failures under Known issues.
 
@@ -19,6 +19,7 @@ CHECKLIST
 - [x] C3 screenshots q1..q5 in screenshots/
 - [x] C4 README.md
 - [x] C5 git commit (no .env) and push
+- [x] D1 Generalise app: upload any PDF, dynamic doc_id Chroma collection, generalized prompt, frontend drag-and-drop & localStorage, verified with Python tests
 
 LOG:
 - Phase 0 done.
@@ -32,10 +33,11 @@ LOG:
 - C4 done: comprehensive README.md written with architecture mermaid flow, setup guide, grounding mechanisms, benchmark answers table, embedded UI screenshots, and directory layout.
 - C5 done: git repository initialized, files staged and committed with .env strictly ignored, and pushed to GitHub repository gas-turbine-rag.
 - Step 9 done: restyled frontend to ChatGPT web app aesthetic (sidebar, clean chat thread, neutral colors, pulsing thinking indicator), recaptured screenshots q1..q5 (1440x900), updated README.md, and pushed to GitHub.
+- D1 done: Generalized app to allow uploading and asking questions on any PDF up to 20MB. Updated config.py (UPLOAD_DIR="uploads", MAX_UPLOAD_MB=20), refactored ingest.py (ingest_pdf returning pages & chunks with scanned PDF detection and CLI support), generalized rag_chain.py (build_chain(doc_id) with collection-specific loading, prompt using "the document", and chain cache dict), updated server.py (POST /upload enforcing 20MB & .pdf format, POST /ask with doc_id and 404/400 validation), modernized frontend/index.html with drag-and-drop upload, sidebar file info, and localStorage session retention. Validated end-to-end with test_pipeline.py on GER-3620-P.pdf and a second solar PDF verifying cross-document isolation, grounding, and error states.
 
 ISSUES:
 - CHAT_MODEL changed from gemini-2.5-flash (404 for new users) to gemini-3.5-flash-lite (confirmed working) in config.py.
-- Free-tier embedding quota: 100 RPM. ingest.py sleeps 65s between batches of 50.
+- Free-tier embedding quota: 100 RPM. ingest.py sleeps 2s between batches of 50 and handles 429 quota backoff automatically.
 - TOP_K increased from 4 to 6 so that Page 9 (maintenance factor definition) and Page 25 (standby/running/disassembly inspection types) are retrieved alongside Page 32.
 
 LMS ANSWERS:
