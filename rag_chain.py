@@ -1,5 +1,5 @@
 """
-rag_chain.py — Build the LCEL RAG chain for any document collection in ChromaDB.
+rag_chain.py — Build the LCEL RAG chain for any document collection in ChromaDB using FastEmbed.
 
 Grounding guarantees in postprocess():
   - Quote must appear (fuzzy-normalized) in the actual retrieved context text.
@@ -10,7 +10,7 @@ import re
 from typing import List, Dict
 
 from langchain_chroma import Chroma
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import PydanticOutputParser
@@ -87,13 +87,12 @@ def postprocess(inputs: dict) -> dict:
     quote = parsed.quote.strip()
     if quote:
         # Use the first 8 distinctive words of the quote for matching
-        # (LLM may add minor punctuation differences)
         key_words = _normalize(quote).split()[:8]
         fragment = " ".join(key_words)
         if fragment and fragment not in norm_ctx:
             return NOT_FOUND
     else:
-        # No quote given — treat as not-found (quote is required when found=true)
+        # No quote given — treat as not-found
         return NOT_FOUND
 
     # ── Check 2: pages must exist in the retrieved chunks ───────────────────
@@ -123,15 +122,13 @@ _chain_cache: Dict[str, any] = {}
 
 def build_chain(doc_id: str = "default"):
     """
-    Build or return cached LCEL RAG chain for a specific Chroma collection `doc_id`.
+    Build or return cached LCEL RAG chain for a specific Chroma collection `doc_id`
+    using the shared local FastEmbed model.
     """
     if doc_id in _chain_cache:
         return _chain_cache[doc_id]
 
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model=config.EMBED_MODEL,
-        google_api_key=config.GOOGLE_API_KEY,
-    )
+    embeddings = config.get_embeddings()
     db = Chroma(
         collection_name=doc_id,
         persist_directory=config.DB_DIR,

@@ -9,3 +9,4 @@ uvicorn
 python-dotenv
 pydantic
 python-multipart
+fastembed

@@ -1,10 +1,11 @@
 """
-server.py — FastAPI server for Document Q&A (any PDF upload & query).
+server.py — FastAPI server for Document Q&A (any PDF upload & query) using FastEmbed.
 Run: uvicorn server:app --port 8000
 """
 import os
 import pathlib
 import uuid
+from contextlib import asynccontextmanager
 
 import chromadb
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -16,7 +17,15 @@ import config
 from ingest import ingest_pdf
 from rag_chain import build_chain
 
-app = FastAPI(title="Document Q&A")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the local FastEmbed model once at server startup
+    config.get_embeddings()
+    yield
+
+
+app = FastAPI(title="Document Q&A", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
