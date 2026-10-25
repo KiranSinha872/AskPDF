@@ -14,36 +14,37 @@ CHAT_MODEL = "gemini-3.5-flash-lite"
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
-TOP_K = 8  # Set to 8 for dense retrieval accuracy with bge-small
+TOP_K = 8  # Set to 8 for dense retrieval coverage
 
 _shared_embeddings = None
 
 
-def get_embeddings():
+def get_embeddings(model_name: str = EMBED_MODEL):
     """
     Singleton loader for local FastEmbed embeddings model.
-    Loads 'BAAI/bge-small-en-v1.5' once into memory.
+    Configured with batch_size=32 and threads set to CPU core count.
+    Uses passage_embed for embed_documents and query_embed for embed_query.
     """
     global _shared_embeddings
     if _shared_embeddings is None:
         from langchain_core.embeddings import Embeddings
         from fastembed import TextEmbedding
 
+        threads = os.cpu_count() or 4
+
         class FastEmbedWrapper(Embeddings):
-            def __init__(self, model_name: str = EMBED_MODEL):
-                self.model = TextEmbedding(model_name=model_name)
+            def __init__(self, model_name: str = model_name, batch_size: int = 32):
+                self.batch_size = batch_size
+                self.model = TextEmbedding(model_name=model_name, threads=threads)
 
             def embed_documents(self, texts: List[str]) -> List[List[float]]:
-                # Embed texts in batches of 32
-                results = []
-                for i in range(0, len(texts), 32):
-                    batch = texts[i : i + 32]
-                    for emb in self.model.embed(batch, batch_size=32):
-                        results.append(emb.tolist())
-                return results
+                return [
+                    e.tolist()
+                    for e in self.model.passage_embed(texts, batch_size=self.batch_size)
+                ]
 
             def embed_query(self, text: str) -> List[float]:
-                return next(self.model.embed([text])).tolist()
+                return next(self.model.query_embed(text)).tolist()
 
-        _shared_embeddings = FastEmbedWrapper(model_name=EMBED_MODEL)
+        _shared_embeddings = FastEmbedWrapper(model_name=model_name)
     return _shared_embeddings

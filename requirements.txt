@@ -10,3 +10,4 @@ python-dotenv
 pydantic
 python-multipart
 fastembed
+pymupdf

@@ -21,6 +21,7 @@ CHECKLIST
 - [x] C5 git commit (no .env) and push
 - [x] D1 Generalise app: upload any PDF, dynamic doc_id Chroma collection, generalized prompt, frontend drag-and-drop & localStorage, verified with Python tests
 - [x] D2 Faster indexing: FastEmbed local embeddings (BAAI/bge-small-en-v1.5), preloaded model, timing benchmark, and memory assessment
+- [x] D3 Tune local embeddings: CPU core count threads, 64-chunk slicing, passage_embed/query_embed, PyMuPDFLoader (5x faster load), SHA-256 upload caching, and MiniLM-L6 vs BGE-small benchmark
 
 LOG:
 - Phase 0 done.
@@ -36,11 +37,12 @@ LOG:
 - Step 9 done: restyled frontend to ChatGPT web app aesthetic (sidebar, clean chat thread, neutral colors, pulsing thinking indicator), recaptured screenshots q1..q5 (1440x900), updated README.md, and pushed to GitHub.
 - D1 done: Generalized app to allow uploading and asking questions on any PDF up to 20MB. Updated config.py (UPLOAD_DIR="uploads", MAX_UPLOAD_MB=20), refactored ingest.py (ingest_pdf returning pages & chunks with scanned PDF detection and CLI support), generalized rag_chain.py (build_chain(doc_id) with collection-specific loading, prompt using "the document", and chain cache dict), updated server.py (POST /upload enforcing 20MB & .pdf format, POST /ask with doc_id and 404/400 validation), modernized frontend/index.html with drag-and-drop upload, sidebar file info, and localStorage session retention. Validated end-to-end with test_pipeline.py on GER-3620-P.pdf and a second solar PDF verifying cross-document isolation, grounding, and error states.
 - D2 done: Replaced remote Gemini embeddings with local FastEmbed (BAAI/bge-small-en-v1.5). Removed batch sleep and 429 retry loops. Timed each stage: PDF load 4.07s, Splitting 0.006s. Embedding with FastEmbed eliminated 429 rate limit backoffs. Verified API end-to-end on GER-3620-P.pdf and test_solar.pdf with TOP_K=8. Measured server RSS: startup ~409MB, after full 60-page PDF indexing RSS reaches ~1450MB, which exceeds 400MB (Render 512MB RAM warning documented).
+- D3 done: Tuned local embeddings pipeline: configured FastEmbed with batch_size=32 and threads=os.cpu_count(), added 64-chunk sliced Chroma writes keeping memory flat, ensured query_embed is used for queries and passage_embed for passages. Benchmarked both BAAI/bge-small-en-v1.5 (57.3s total) and sentence-transformers/all-MiniLM-L6-v2 (23.8s total). Replaced PyPDFLoader with PyMuPDFLoader (loaded 60 pages in 0.30s - 0.81s vs 4.07s). Confirmed layout and code retention on Binary-Trees-Complete-Course.pdf with diameter code query. Implemented SHA-256 upload caching (0.01s on duplicate uploads). Verified Q1 and Titanium questions on GER-3620-P.pdf.
 
 ISSUES:
 - CHAT_MODEL changed from gemini-2.5-flash (404 for new users) to gemini-3.5-flash-lite (confirmed working) in config.py.
 - Free-tier embedding quota: 100 RPM caused 429 backoff delays in remote Gemini embeddings; solved by switching to local FastEmbed (BAAI/bge-small-en-v1.5).
-- Local FastEmbed memory: Process RSS peaks at ~1.45 GB during full 60-page indexing due to ONNX Runtime memory buffers on CPU. Exceeds 400 MB and will exceed a 512 MB Render instance limit.
+- Local FastEmbed memory: Process RSS peaks at ~1.0 - 1.45 GB during full 60-page indexing due to ONNX Runtime memory buffers on CPU. Exceeds 400 MB and will exceed a 512 MB Render instance limit.
 - TOP_K updated to 8 for dense retrieval accuracy with bge-small.
 
 LMS ANSWERS:

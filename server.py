@@ -1,8 +1,10 @@
 """
-server.py — FastAPI server for Document Q&A (any PDF upload & query) using FastEmbed.
+server.py — FastAPI server for Document Q&A (any PDF upload & query) with SHA-256 caching.
 Run: uvicorn server:app --port 8000
 """
 import os
+import json
+import hashlib
 import pathlib
 import uuid
 from contextlib import asynccontextmanager
@@ -16,6 +18,27 @@ from pydantic import BaseModel
 import config
 from ingest import ingest_pdf
 from rag_chain import build_chain
+
+CACHE_FILE = os.path.join(config.DB_DIR, "file_hashes.json")
+
+
+def _load_hash_cache() -> dict:
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_hash_cache(cache: dict) -> None:
+    os.makedirs(config.DB_DIR, exist_ok=True)
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2)
+    except Exception:
+        pass
 
 
 @asynccontextmanager
@@ -73,6 +96,28 @@ async def upload(file: UploadFile = File(...)):
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    # SHA-256 caching: check if this file was already indexed
+    file_hash = hashlib.sha256(content).hexdigest()
+    cache = _load_hash_cache()
+
+    if file_hash in cache:
+        cached_entry = cache[file_hash]
+        cached_doc_id = cached_entry.get("doc_id")
+        # Verify collection still exists in Chroma
+        try:
+            client = chromadb.PersistentClient(path=config.DB_DIR)
+            existing = [c.name for c in client.list_collections()]
+            if cached_doc_id in existing:
+                return {
+                    "doc_id": cached_doc_id,
+                    "filename": filename,
+                    "pages": cached_entry.get("pages", 0),
+                    "chunks": cached_entry.get("chunks", 0),
+                    "cached": True,
+                }
+        except Exception:
+            pass
+
     # Save to uploads/
     doc_id = uuid.uuid4().hex[:12]
     os.makedirs(config.UPLOAD_DIR, exist_ok=True)
@@ -88,11 +133,21 @@ async def upload(file: UploadFile = File(...)):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to process document: {str(exc)}")
 
+    # Update hash cache
+    cache[file_hash] = {
+        "doc_id": doc_id,
+        "filename": filename,
+        "pages": stats["pages"],
+        "chunks": stats["chunks"],
+    }
+    _save_hash_cache(cache)
+
     return {
         "doc_id": doc_id,
         "filename": filename,
         "pages": stats["pages"],
         "chunks": stats["chunks"],
+        "cached": False,
     }
 
 

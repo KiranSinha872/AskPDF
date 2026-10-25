@@ -1,0 +1,14 @@
+{
+  "66b3ffa4182b38bf8aa2cbb8e864ab6bbc517db064de4b1126cad5a5272117f5": {
+    "doc_id": "14d6edc031a7",
+    "filename": "test_solar.pdf",
+    "pages": 2,
+    "chunks": 2
+  },
+  "aad35e4a878f88be8ceba555145fc5d5d0adb629d9ee17dfa42fd1b5e3b9224f": {
+    "doc_id": "fd305261bdd9",
+    "filename": "GER-3620-P.pdf",
+    "pages": 60,
+    "chunks": 245
+  }
+}
