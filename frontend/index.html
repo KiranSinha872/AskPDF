@@ -249,11 +249,36 @@
     /* Upload status & errors */
     #upload-status {
       display: none;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       font-size: 14px;
       color: var(--text-main);
       margin-top: 16px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .upload-status-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #progress-bar-container {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.3s ease;
     }
 
     #error-banner {
@@ -519,8 +544,13 @@
         <input type="file" id="pdf-file-input" accept=".pdf,application/pdf" style="display: none;" />
 
         <div id="upload-status">
-          <div class="dot"></div>
-          <span>Uploading and indexing...</span>
+          <div class="upload-status-header">
+            <div class="dot"></div>
+            <span id="upload-status-text">Uploading...</span>
+          </div>
+          <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+          </div>
         </div>
 
         <div id="error-banner"></div>
@@ -570,6 +600,8 @@
   const uploadBox        = document.getElementById('upload-box');
   const fileInput        = document.getElementById('pdf-file-input');
   const uploadStatus     = document.getElementById('upload-status');
+  const uploadStatusText = document.getElementById('upload-status-text');
+  const progressBar      = document.getElementById('progress-bar');
   const errorBanner      = document.getElementById('error-banner');
   const docInfoCard      = document.getElementById('doc-info-card');
   const sidebarDocName   = document.getElementById('sidebar-doc-name');
@@ -693,6 +725,15 @@
     }
   });
 
+  function resetUploadUI() {
+    isUploading = false;
+    uploadStatus.style.display = 'none';
+    uploadBox.style.pointerEvents = '';
+    uploadBox.style.opacity = '';
+    fileInput.value = '';
+    progressBar.style.width = '0%';
+  }
+
   async function handleFileUpload(file) {
     hideError();
 
@@ -714,6 +755,8 @@
 
     isUploading = true;
     uploadStatus.style.display = 'flex';
+    uploadStatusText.textContent = 'Uploading...';
+    progressBar.style.width = '10%';
     uploadBox.style.pointerEvents = 'none';
     uploadBox.style.opacity = '0.6';
 
@@ -729,23 +772,83 @@
       const data = await res.json();
       if (!res.ok) {
         showError(data.detail || `Upload failed (Status ${res.status})`);
-      } else {
+        resetUploadUI();
+        return;
+      }
+
+      // Fast-path: SHA-256 cache hit returns status "ready" immediately
+      if (data.status === 'ready') {
+        progressBar.style.width = '100%';
         currentDocId = data.doc_id;
         localStorage.setItem('askpdf_doc_id', data.doc_id);
         localStorage.setItem('askpdf_doc_name', data.filename);
         localStorage.setItem('askpdf_doc_pages', data.pages);
         localStorage.setItem('askpdf_doc_chunks', data.chunks);
 
+        resetUploadUI();
         setDocumentActive(data.filename, data.pages, data.chunks);
+        return;
       }
+
+      // Non-blocking upload: poll /status/{doc_id} every 1.5s
+      const docId = data.doc_id;
+      const filename = data.filename;
+      uploadStatusText.textContent = 'Indexing...';
+      progressBar.style.width = '15%';
+
+      const startTime = Date.now();
+      const pollTimer = setInterval(async () => {
+        // 3-minute timeout guard
+        if (Date.now() - startTime > 180000) {
+          clearInterval(pollTimer);
+          showError('Indexing timed out after 3 minutes. Please try again.');
+          resetUploadUI();
+          return;
+        }
+
+        try {
+          const sRes = await fetch(`/status/${docId}`);
+          if (!sRes.ok) {
+            clearInterval(pollTimer);
+            showError(`Failed to fetch indexing status (Status ${sRes.status}).`);
+            resetUploadUI();
+            return;
+          }
+
+          const sData = await sRes.json();
+          if (sData.status === 'processing') {
+            const done = sData.batches_done || 0;
+            const total = sData.batches_total || 1;
+            uploadStatusText.textContent = total > 1 ? `Indexing... ${done} of ${total}` : 'Indexing...';
+            const pct = Math.max(15, Math.min(Math.round((done / total) * 95), 95));
+            progressBar.style.width = pct + '%';
+          } else if (sData.status === 'ready') {
+            clearInterval(pollTimer);
+            progressBar.style.width = '100%';
+            uploadStatusText.textContent = 'Ready!';
+            currentDocId = docId;
+            localStorage.setItem('askpdf_doc_id', docId);
+            localStorage.setItem('askpdf_doc_name', filename);
+            localStorage.setItem('askpdf_doc_pages', sData.pages);
+            localStorage.setItem('askpdf_doc_chunks', sData.chunks);
+
+            setTimeout(() => {
+              resetUploadUI();
+              setDocumentActive(filename, sData.pages, sData.chunks);
+            }, 300);
+          } else if (sData.status === 'error') {
+            clearInterval(pollTimer);
+            showError(sData.error || 'Indexing encountered an error.');
+            resetUploadUI();
+          }
+        } catch (pollErr) {
+          // Continue polling on temporary network hiccups
+        }
+      }, 1500);
+
     } catch (err) {
       showError('Network error or server unreachable. Please check connection.');
-    } finally {
-      isUploading = false;
-      uploadStatus.style.display = 'none';
-      uploadBox.style.pointerEvents = '';
-      uploadBox.style.opacity = '';
-      fileInput.value = '';
+      resetUploadUI();
     }
   }
 

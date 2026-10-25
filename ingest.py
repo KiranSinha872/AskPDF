@@ -16,11 +16,12 @@ import config
 SLICE_SIZE = 64
 
 
-def ingest_pdf(pdf_path: str, doc_id: str) -> dict:
+def ingest_pdf(pdf_path: str, doc_id: str, progress_callback=None) -> dict:
     """
     Ingest a PDF file into Chroma collection `doc_id` using PyMuPDFLoader and FastEmbed.
     Embeds in slices of 64 to keep memory flat.
     Returns dict with page count and chunk count.
+    Optional progress_callback(batches_done, batches_total, pages, chunks).
     """
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"File not found: {pdf_path}")
@@ -49,6 +50,15 @@ def ingest_pdf(pdf_path: str, doc_id: str) -> dict:
     if not chunks:
         raise ValueError("No readable text found (scanned PDF?)")
 
+    batches_total = (len(chunks) + SLICE_SIZE - 1) // SLICE_SIZE
+    if progress_callback:
+        progress_callback(
+            batches_done=0,
+            batches_total=batches_total,
+            pages=len(valid_docs),
+            chunks=len(chunks),
+        )
+
     # Load shared embeddings singleton
     embeddings = config.get_embeddings()
 
@@ -59,9 +69,16 @@ def ingest_pdf(pdf_path: str, doc_id: str) -> dict:
     )
 
     # Embed and write chunks in slices of 64 so memory stays flat
-    for i in range(0, len(chunks), SLICE_SIZE):
+    for idx, i in enumerate(range(0, len(chunks), SLICE_SIZE)):
         slice_chunks = chunks[i : i + SLICE_SIZE]
         db.add_documents(slice_chunks)
+        if progress_callback:
+            progress_callback(
+                batches_done=idx + 1,
+                batches_total=batches_total,
+                pages=len(valid_docs),
+                chunks=len(chunks),
+            )
 
     return {
         "pages": len(valid_docs),

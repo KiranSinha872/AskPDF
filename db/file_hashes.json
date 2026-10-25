@@ -6,9 +6,21 @@
     "chunks": 2
   },
   "aad35e4a878f88be8ceba555145fc5d5d0adb629d9ee17dfa42fd1b5e3b9224f": {
-    "doc_id": "fd305261bdd9",
+    "doc_id": "73f45ab8d90d",
     "filename": "GER-3620-P.pdf",
     "pages": 60,
     "chunks": 245
+  },
+  "2fcc9290c6ceab417cb291dff6e941efc59769de1ec5fcf5d0d7060d12e2a4d1": {
+    "doc_id": "4af8349e403c",
+    "filename": "test_doc_1792957473.pdf",
+    "pages": 3,
+    "chunks": 3
+  },
+  "fc9fad91afdcfd7bf1eb0ae687c9656e9bf0a9cbaa317615f79151b12465bda1": {
+    "doc_id": "binary_trees",
+    "filename": "Binary-Trees-Complete-Course.pdf",
+    "pages": 105,
+    "chunks": 236
   }
 }
