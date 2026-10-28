@@ -180,3 +180,4 @@ Grounding is enforced deterministically at two stages:
 ```
 
 > **Note on Page Numbers**: All page citations are 1-based (Page 1 corresponds to the document cover, exactly matching PDF viewer page indexing).
+# AskPDF
